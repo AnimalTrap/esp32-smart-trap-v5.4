@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Trap Monitor: xyz9527</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            padding: 30px; 
+            background: #f4f7f6; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { color: #2c3e50; margin-bottom: 5px; }
+        .subtitle { color: #7f8c8d; margin-bottom: 25px; font-size: 14px; }
+        .card { 
+            background: white; 
+            padding: 25px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05); 
+            width: 320px; 
+            transition: all 0.3s ease;
+            border-left: 12px solid #bdc3c7;
+        }
+        /* 狀態顏色樣式 */
+        .ARMED { border-left-color: #2ecc71; background: #fafdfb; }
+        .TRIGGERED { border-left-color: #e74c3c; background: #fffcfb; }
+        
+        .status-text { font-size: 24px; font-weight: bold; margin: 15px 0 5px 0; }
+        .ARMED .status-text { color: #2ecc71; }
+        .TRIGGERED .status-text { color: #e74c3c; }
+        
+        small { color: #95a5a6; display: block; margin-top: 15px; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+    <h1>誘捕籠即時監控</h1>
+    <div class="subtitle">專案版本: ALIVE TRAP v5.4</div>
+
+    <div id="status-card" class="card">
+        <h3 style="margin:0; color:#34495e;">裝置 ID: xyz9527</h3>
+        <p id="status-val" class="status-text">連線中...</p>
+        <p id="cell-info" style="margin:5px 0; color:#7f8c8d; font-size:13px; word-break:break-all;">等待基站數據...</p>
+        <small id="time-val">最後更新: --:--:--</small>
+    </div>
+
+    <script>
+        // --- 關鍵修正：對齊 EMQX 公共 Broker 的網頁端 WebSocket 設定 ---
+        const options = {
+            hostname: 'broker.emqx.io', // 伺服器改為 EMQX
+            port: 8084,                 // EMQX 的安全 WebSocket (WSS) 專用連接埠
+            protocol: 'wss',            // 瀏覽器強制要求的加密協定
+            path: '/mqtt',              // EMQX 需要的連線路徑
+            clientId: 'web_trap_' + Math.random().toString(16).substr(2, 8),
+            keepalive: 60,
+            reconnectPeriod: 1000       // 斷線時每秒自動重連
+        };
+
+        console.log("正在連線至 EMQX Broker...");
+        const client = mqtt.connect(options);
+
+        const card = document.getElementById("status-card");
+        const statusVal = document.getElementById("status-val");
+        const cellInfo = document.getElementById("cell-info");
+        const timeVal = document.getElementById("time-val");
+
+        client.on('connect', () => {
+            console.log("成功連線至 EMQX！正在訂閱主題...");
+            // 訂閱你專屬的穩定 Topic
+            client.subscribe("hk_trap_2026_xyz9527/status", (err) => {
+                if (!err) {
+                    console.log("主題訂閱成功: hk_trap_2026_xyz9527/status");
+                    statusVal.innerText = "等待硬體資料...";
+                }
+            });
+        });
+
+        client.on('message', (topic, message) => {
+            let payload = message.toString();
+            console.log("收到最新數據 -> Topic:", topic, "Payload:", payload);
+            
+            // 取得當前時間
+            let nowStr = new Date().toLocaleTimeString();
+            timeVal.innerText = "最後更新: " + nowStr;
+
+            // 解析 ESP32 發過來的不同字串
+            if (payload.includes("TRAP_ARMED") || payload === "ARMED") {
+                card.className = "card ARMED";
+                statusVal.innerText = "已佈防 (ARMED)";
+            } 
+            else if (payload.includes("TRAP_TRIGGERED") || payload === "TRIGGERED") {
+                card.className = "card TRIGGERED";
+                statusVal.innerText = "已觸發 (TRIGGERED)";
+            } 
+            else if (payload.includes("+QENG:")) {
+                // 這是 setup 時發送的基站資料，單獨顯示在下方
+                cellInfo.innerText = "基地台資訊: " + payload;
+            }
+        });
+
+        client.on('error', (err) => {
+            console.error("MQTT 連線錯誤: ", err);
+            statusVal.innerText = "連線發生錯誤";
+        });
+
+        client.on('close', () => {
+            console.log("與 MQTT 伺服器斷開連線，嘗試重連中...");
+        });
+    </script>
+</body>
+</html>
