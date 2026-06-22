@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>動物管理遠端監控系統</title>
     
-    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     
     <style>
         body {
@@ -22,12 +22,11 @@
         h1 { color: #333; margin-bottom: 5px; font-size: 26px; text-align: center; }
         .subtitle { color: #6c757d; margin-bottom: 20px; font-size: 14px; }
         
-        /* 🗺️ 大地圖樣式 */
         #main-map {
             width: 100%;
             max-width: 940px;
             height: 300px;
-            background-color: #e5e3df; /* 預設灰色地圖背景 */
+            background-color: #e5e3df;
             border-radius: 12px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.15);
             margin-bottom: 25px;
@@ -42,7 +41,6 @@
             max-width: 1200px;
         }
 
-        /* 🪤 卡片樣式 */
         .card {
             background: white;
             border-radius: 12px;
@@ -64,7 +62,6 @@
         .status-text { font-size: 18px; font-weight: bold; margin: 8px 0; color: #495057; }
         .time-text { font-size: 11px; color: #6c757d; background: #eee; padding: 2px 6px; border-radius: 4px; display: inline-block; }
 
-        /* 📍 迷你地圖樣式 */
         .mini-map {
             width: 100%;
             height: 140px;
@@ -114,4 +111,102 @@
     </div>
 
     <script>
-        // 1. 初始化靜態 Dummy 時間資料 (即使沒連網也能跑
+        const initTime = new Date().toLocaleTimeString();
+        document.getElementById("time-02").innerText = `最後更新: ${initTime}`;
+        document.getElementById("time-03").innerText = `最後更新: ${initTime}`;
+
+        // 📍 長沙灣政府合署座標
+        const cswGovLat = 22.3307;
+        const cswGovLng = 114.1606;
+        const loc01 = [cswGovLat, cswGovLng];
+        const loc02 = [cswGovLat + 0.0003, cswGovLng + 0.0003];
+        const loc03 = [cswGovLat - 0.0003, cswGovLng - 0.0003];
+
+        // 🌟 穩定分流圖層網址
+        const tileLayerUrl = 'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                try {
+                    if (typeof L !== 'undefined') {
+                        // 初始化大地圖
+                        const mainMap = L.map('main-map').setView([cswGovLat, cswGovLng], 17);
+                        L.tileLayer(tileLayerUrl, { maxZoom: 19 }).addTo(mainMap);
+
+                        const mainMarker01 = L.marker(loc01).addTo(mainMap).bindPopup("<b>陷阱 #01 (實體)</b>");
+                        L.marker(loc02).addTo(mainMap).bindPopup("<b>陷阱 #02 (模擬)</b>");
+                        L.marker(loc03).addTo(mainMap).bindPopup("<b>陷阱 #03 (模擬)</b>");
+
+                        // 初始化迷你地圖
+                        const miniOpts = { attributionControl: false, zoomControl: false, dragging: false, scrollWheelZoom: false };
+                        
+                        const m1 = L.map('mini-map-01', miniOpts).setView(loc01, 17);
+                        L.tileLayer(tileLayerUrl).addTo(m1); L.marker(loc01).addTo(m1);
+
+                        const m2 = L.map('mini-map-02', miniOpts).setView(loc02, 17);
+                        L.tileLayer(tileLayerUrl).addTo(m2); L.marker(loc02).addTo(m2);
+
+                        const m3 = L.map('mini-map-03', miniOpts).setView(loc03, 17);
+                        L.tileLayer(tileLayerUrl).addTo(m3); L.marker(loc03).addTo(m3);
+
+                        // 強制刷新尺寸
+                        setTimeout(() => {
+                            mainMap.invalidateSize(); m1.invalidateSize(); m2.invalidateSize(); m3.invalidateSize();
+                        }, 300);
+
+                        setupMQTT(mainMarker01);
+                    } else {
+                        setupMQTT(null);
+                    }
+                } catch (err) {
+                    console.error("地圖載入出錯:", err);
+                    setupMQTT(null);
+                }
+            }, 300);
+        });
+
+        function setupMQTT(mainMarker01) {
+            try {
+                if (typeof mqtt === 'undefined') return;
+                const options = {
+                    connectTimeout: 4000,
+                    clientId: 'phone_demo_map_' + Math.random().toString(16).substr(2, 8),
+                    keepalive: 60,
+                    clean: true,
+                };
+
+                const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', options);
+
+                client.on('connect', () => {
+                    client.subscribe('hk_trap_2026_xyz9527/status');
+                });
+
+                client.on('message', (topic, payload) => {
+                    const message = payload.toString();
+                    if (message.toUpperCase() === "PING") return;
+
+                    const cardElement = document.getElementById("trap-01");
+                    const statusElement = document.getElementById("status-01");
+                    const timeElement = document.getElementById("time-01");
+                    const now = new Date().toLocaleTimeString();
+                    
+                    timeElement.innerText = `最後更新: ${now}`;
+
+                    if (message.toUpperCase().includes("TRIGGERED") || message.toUpperCase().includes("WARNING")) {
+                        statusElement.innerText = "🚨 已經觸發！";
+                        cardElement.className = "card status-triggered"; 
+                        if (mainMarker01) mainMarker01.setPopupContent("<b>🪤 陷阱 #01 (實體)</b><br><span style='color:red;'>🚨 已經觸發！</span>").openPopup();
+                    } 
+                    else if (message.toUpperCase().includes("ARMED") || message.toUpperCase().includes("STATUS")) {
+                        statusElement.innerText = "✅ 安全佈防中";
+                        cardElement.className = "card status-armed"; 
+                        if (mainMarker01) mainMarker01.setPopupContent("<b>🪤 陷阱 #01 (實體)</b><br><span style='color:green;'>✅ 安全佈防中</span>");
+                    }
+                });
+            } catch (mqttErr) {
+                console.error("MQTT 錯誤:", mqttErr);
+            }
+        }
+    </script>
+</body>
+</html>
