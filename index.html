@@ -25,7 +25,7 @@
         #main-map {
             width: 100%;
             max-width: 940px;
-            height: 300px;
+            height: 320px;
             background-color: #e5e3df;
             border-radius: 12px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.15);
@@ -91,10 +91,10 @@
             <div id="mini-map-01" class="mini-map"></div>
         </div>
 
-        <div id="trap-02" class="card status-armed">
+        <div id="trap-02" class="card status-triggered">
             <div class="status-box">
-                <h2>🪤 Trap #02 </h2>
-                <div id="status-02" class="status-text">🚨 Triggered</div>
+                <h2>🪤 陷阱 #02 </h2>
+                <div id="status-02" class="status-text" style="color: #dc3545;">🚨 Triggered！</div>
                 <div id="time-02" class="time-text">最後更新: --:--:--</div>
             </div>
             <div id="mini-map-02" class="mini-map"></div>
@@ -102,7 +102,7 @@
 
         <div id="trap-03" class="card status-armed">
             <div class="status-box">
-                <h2>🪤 Trap #03 </h2>
+                <h2>🪤 陷阱 #03 </h2>
                 <div id="status-03" class="status-text">✅ Armed</div>
                 <div id="time-03" class="time-text">最後更新: --:--:--</div>
             </div>
@@ -115,39 +115,43 @@
         document.getElementById("time-02").innerText = `最後更新: ${initTime}`;
         document.getElementById("time-03").innerText = `最後更新: ${initTime}`;
 
-        // 📍 長沙灣政府合署座標
-        const cswGovLat = 22.3307;
-        const cswGovLng = 114.1606;
-        const loc01 = [cswGovLat, cswGovLng];
-        const loc02 = [cswGovLat + 0.0003, cswGovLng + 0.0003];
-        const loc03 = [cswGovLat - 0.0003, cswGovLng - 0.0003];
+        // 📍 🌟 修正後的極精準大樓核心座標
+        const cswGovLat = 22.33085; 
+        const cswGovLng = 114.16055;
+        
+        // 讓 3 個陷阱散落在大樓的東南西北不同角落，展現精準度
+        const loc01 = [cswGovLat, cswGovLng];                   // 大樓中心
+        const loc02 = [cswGovLat + 0.00012, cswGovLng + 0.00012]; // 大樓東北角
+        const loc03 = [cswGovLat - 0.00012, cswGovLng - 0.00012]; // 大樓西南角
 
-        // 🌟 穩定分流圖層網址
         const tileLayerUrl = 'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
         window.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 try {
                     if (typeof L !== 'undefined') {
-                        // 初始化大地圖
-                        const mainMap = L.map('main-map').setView([cswGovLat, cswGovLng], 17);
+                        // 🌟 修正：將初始縮放從 17 放大到 19（Leaflet 最大清晰度）
+                        const mainMap = L.map('main-map').setView([cswGovLat, cswGovLng], 19);
                         L.tileLayer(tileLayerUrl, { maxZoom: 19 }).addTo(mainMap);
 
                         const mainMarker01 = L.marker(loc01).addTo(mainMap).bindPopup("<b>陷阱 #01 (實體)</b>");
-                        L.marker(loc02).addTo(mainMap).bindPopup("<b>陷阱 #02 (模擬)</b>");
-                        L.marker(loc03).addTo(mainMap).bindPopup("<b>陷阱 #03 (模擬)</b>");
+                        
+                        // 2 號預設彈出警告
+                        const mainMarker02 = L.marker(loc02).addTo(mainMap).bindPopup("<b>🪤 陷阱 #02 (模擬)</b><br><span style='color:red;'>🚨 已經觸發！</span>").openPopup();
+                        
+                        L.marker(loc03).addTo(map = mainMap).bindPopup("<b>陷阱 #03 (模擬)</b>");
 
-                        // 初始化迷你地圖
+                        // 初始化迷你地圖 (同步放大到 19，可以看清街道與大樓切面)
                         const miniOpts = { attributionControl: false, zoomControl: false, dragging: false, scrollWheelZoom: false };
                         
-                        const m1 = L.map('mini-map-01', miniOpts).setView(loc01, 17);
-                        L.tileLayer(tileLayerUrl).addTo(m1); L.marker(loc01).addTo(m1);
+                        const m1 = L.map('mini-map-01', miniOpts).setView(loc01, 19);
+                        L.tileLayer(tileLayerUrl, { maxZoom: 19 }).addTo(m1); L.marker(loc01).addTo(m1);
 
-                        const m2 = L.map('mini-map-02', miniOpts).setView(loc02, 17);
-                        L.tileLayer(tileLayerUrl).addTo(m2); L.marker(loc02).addTo(m2);
+                        const m2 = L.map('mini-map-02', miniOpts).setView(loc02, 19);
+                        L.tileLayer(tileLayerUrl, { maxZoom: 19 }).addTo(m2); L.marker(loc02).addTo(m2);
 
-                        const m3 = L.map('mini-map-03', miniOpts).setView(loc03, 17);
-                        L.tileLayer(tileLayerUrl).addTo(m3); L.marker(loc03).addTo(m3);
+                        const m3 = L.map('mini-map-03', miniOpts).setView(loc03, 19);
+                        L.tileLayer(tileLayerUrl, { maxZoom: 19 }).addTo(m3); L.marker(loc03).addTo(m3);
 
                         // 強制刷新尺寸
                         setTimeout(() => {
